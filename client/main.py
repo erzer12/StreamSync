@@ -17,7 +17,7 @@ from google import genai
 from google.genai import types
 from PIL import Image
 
-from audio_routing import find_device
+from audio_routing import get_cable_input_device_index, get_mic_device_index
 from capture import capture_frame
 
 # ---------------------------------------------------------------------------
@@ -52,11 +52,13 @@ pa = pyaudio.PyAudio()
 # ---------------------------------------------------------------------------
 async def send_audio(session: genai.live.AsyncSession) -> None:
     """Read from the default mic and stream PCM to Gemini Live."""
+    mic_idx = get_mic_device_index(pa)
     stream = pa.open(
         format=pyaudio.paInt16,
         channels=1,
         rate=SAMPLE_RATE_IN,
         input=True,
+        input_device_index=mic_idx,
         frames_per_buffer=CHUNK_FRAMES_IN,
     )
     try:
@@ -84,7 +86,7 @@ async def send_video(session: genai.live.AsyncSession) -> None:
 
 async def receive(session: genai.live.AsyncSession) -> None:
     """Play AI audio through VB-Audio CABLE Input and write subtitles to disk."""
-    cable_idx = find_device(pa, "CABLE Input", direction="output")
+    cable_idx = get_cable_input_device_index(pa)
     out_stream = pa.open(
         format=pyaudio.paInt16,
         channels=1,
@@ -96,7 +98,16 @@ async def receive(session: genai.live.AsyncSession) -> None:
         async for response in session.receive():
             # Barge-in: flush output buffer on server interruption
             if getattr(response, "server_content", None) and response.server_content.interrupted:
-                out_stream.write(b"\x00" * CHUNK_FRAMES_OUT * 2)
+                print("Barge-in detected – flushing buffer")
+                out_stream.stop_stream()
+                out_stream.close()
+                out_stream = pa.open(
+                    format=pyaudio.paInt16,
+                    channels=1,
+                    rate=SAMPLE_RATE_OUT,
+                    output=True,
+                    output_device_index=cable_idx,
+                )
                 continue
 
             if response.data:

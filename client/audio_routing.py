@@ -41,5 +41,16 @@ def find_device(pa: pyaudio.PyAudio, name_fragment: str, direction: str = "outpu
     )
 
 
+def get_cable_input_device_index(pa: pyaudio.PyAudio) -> int:
+    return find_device(pa, "CABLE Input", direction="output")
+
+
+def get_mic_device_index(pa: pyaudio.PyAudio) -> int:
+    try:
+        return pa.get_default_input_device_info()["index"]
+    except Exception:
+        return find_device(pa, "Microphone", direction="input")
+
+
 if __name__ == "__main__":
     list_devices()
