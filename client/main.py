@@ -8,7 +8,6 @@ Launches three concurrent asyncio tasks:
 """
 
 import asyncio
-import base64
 import io
 import os
 
@@ -18,10 +17,20 @@ from google.genai import types
 from PIL import Image
 
 from audio_routing import get_cable_input_device_index, get_mic_device_index
-from capture import capture_frame
+from capture import get_screen_frame
 
 # ---------------------------------------------------------------------------
-# Configuration
+# Screen Capture Configuration
+# ---------------------------------------------------------------------------
+
+# Screen capture config - adjust per streamer to match game window position
+MONITOR_CONFIG: dict = {"top": 0, "left": 0, "width": 1920, "height": 1080}
+
+# Set to a .jpg/.png path to bypass live capture (for API connection testing)
+TEST_IMAGE_PATH: str | None = None
+
+# ---------------------------------------------------------------------------
+# Gemini Configuration
 # ---------------------------------------------------------------------------
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 MODEL = "gemini-2.0-flash-live-001"
@@ -48,7 +57,26 @@ pa = pyaudio.PyAudio()
 
 
 # ---------------------------------------------------------------------------
-# Async tasks
+# Helper Functions
+# ---------------------------------------------------------------------------
+
+def _load_test_image() -> bytes:
+    """Load a static JPEG for API connection testing.
+
+    Loads TEST_IMAGE_PATH, resizes to 720p, encodes as JPEG at quality=85.
+
+    Returns:
+        Raw JPEG bytes ready for Gemini Live API.
+    """
+    img = Image.open(TEST_IMAGE_PATH)
+    img = img.resize((1280, 720), Image.BILINEAR)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Async Tasks
 # ---------------------------------------------------------------------------
 async def send_audio(session: genai.live.AsyncSession) -> None:
     """Read from the default mic and stream PCM to Gemini Live."""
@@ -66,22 +94,41 @@ async def send_audio(session: genai.live.AsyncSession) -> None:
             data = await asyncio.get_event_loop().run_in_executor(
                 None, stream.read, CHUNK_FRAMES_IN, False
             )
-            await session.send({"mime_type": "audio/pcm", "data": data})
+            # Use send_realtime_input with Blob for proper Gemini Live API
+            blob = types.Blob(data=data, mime_type="audio/pcm")
+            await session.send_realtime_input(audio=blob)
     finally:
         stream.stop_stream()
         stream.close()
 
 
 async def send_video(session: genai.live.AsyncSession) -> None:
-    """Capture one screen frame per second and send it to Gemini Live."""
+    """Capture one screen frame per second and send it to Gemini Live.
+
+    Uses monotonic clock timing to maintain exactly 1 FPS without drift.
+    If TEST_IMAGE_PATH is set, loads a static image instead of live capture.
+    """
+    loop = asyncio.get_event_loop()
+    next_tick = loop.time()
+
     while True:
-        frame: Image.Image = await asyncio.get_event_loop().run_in_executor(None, capture_frame)
-        buf = io.BytesIO()
-        frame.save(buf, format="JPEG", quality=70)
-        await session.send(
-            {"mime_type": "image/jpeg", "data": base64.b64encode(buf.getvalue()).decode()}
-        )
-        await asyncio.sleep(1)
+        next_tick += 1.0
+
+        # Get frame: either from static test image or live capture
+        if TEST_IMAGE_PATH:
+            frame_bytes = await loop.run_in_executor(None, _load_test_image)
+        else:
+            frame_bytes = await loop.run_in_executor(
+                None, get_screen_frame, MONITOR_CONFIG
+            )
+
+        # Wrap as Gemini Blob and send via realtime input channel
+        blob = types.Blob(data=frame_bytes, mime_type="image/jpeg")
+        await session.send_realtime_input(video=blob)
+
+        # Sleep until next tick (compensating for capture/encode time)
+        delay = max(0, next_tick - loop.time())
+        await asyncio.sleep(delay)
 
 
 async def receive(session: genai.live.AsyncSession) -> None:
