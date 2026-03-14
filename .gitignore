@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Environment variables
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Terraform
+my_agent/deployment/terraform/.terraform/
+my_agent/deployment/terraform/*.tfstate
+my_agent/deployment/terraform/*.tfstate.backup
+my_agent/deployment/terraform/.terraform.lock.hcl
+
+# Logs
+*.log
