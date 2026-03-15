@@ -30,3 +30,6 @@ my_agent/deployment/terraform/.terraform.lock.hcl
 
 # Logs
 *.log
+
+# Implementation plans (internal documentation)
+plan/
