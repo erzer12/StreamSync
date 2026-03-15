@@ -33,7 +33,7 @@ TEST_IMAGE_PATH: str | None = None
 # Gemini Configuration
 # ---------------------------------------------------------------------------
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-MODEL = "gemini-2.0-flash-live-001"
+MODEL = "gemini-2.5-flash-live-001"
 
 SAMPLE_RATE_IN = 16_000    # mic → Gemini
 SAMPLE_RATE_OUT = 24_000   # Gemini → speaker
@@ -69,13 +69,12 @@ def _load_test_image() -> bytes:
         Raw JPEG bytes ready for Gemini Live API.
     """
     with Image.open(TEST_IMAGE_PATH) as img:
-        # Convert any non-RGB mode (RGBA, P, palette) to RGB to avoid save errors
         if img.mode != "RGB":
             img = img.convert("RGB")
         img = img.resize((1280, 720), Image.BILINEAR)
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=85)
-        return buf.getvalue()
+    return buf.getvalue()
 
 
 # ---------------------------------------------------------------------------
