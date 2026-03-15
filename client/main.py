@@ -33,7 +33,7 @@ TEST_IMAGE_PATH: str | None = None
 # Gemini Configuration
 # ---------------------------------------------------------------------------
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-MODEL = "gemini-2.0-flash-live-001"
+MODEL = "gemini-2.5-flash-live-001"
 
 SAMPLE_RATE_IN = 16_000    # mic → Gemini
 SAMPLE_RATE_OUT = 24_000   # Gemini → speaker
