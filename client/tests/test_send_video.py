@@ -54,7 +54,9 @@ class TestSendVideoWithTestImage:
             # Create a simple test image
             img = Image.new("RGB", (640, 480), color="red")
             img.save(f.name, format="JPEG")
-            yield f.name
+            tmp_path = f.name
+        yield tmp_path
+        os.unlink(tmp_path)
 
     async def test_static_image_sends_blob(self, temp_test_image):
         """Verify send_video sends a Blob with mime_type='image/jpeg'."""
@@ -156,7 +158,9 @@ class TestLoadTestImage:
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
             img = Image.new("RGB", (800, 600), color="blue")
             img.save(f.name, format="JPEG")
-            yield f.name
+            tmp_path = f.name
+        yield tmp_path
+        os.unlink(tmp_path)
 
     def test_load_test_image_returns_bytes(self, temp_test_image):
         """Verify _load_test_image returns JPEG bytes."""
