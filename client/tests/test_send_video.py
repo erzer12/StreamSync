@@ -1,5 +1,4 @@
-"""
-Integration tests for client/main.py send_video function.
+"""Integration tests for client/main.py send_video function.
 
 Tests the video pipeline integration with mocked Gemini Live session.
 """
@@ -51,35 +50,30 @@ class TestSendVideoWithTestImage:
     def temp_test_image(self):
         """Create a temporary test image file."""
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
-            # Create a simple test image
             img = Image.new("RGB", (640, 480), color="red")
             img.save(f.name, format="JPEG")
             yield f.name
+        # Cleanup after test
+        if os.path.exists(f.name):
+            os.unlink(f.name)
 
     async def test_static_image_sends_blob(self, temp_test_image):
         """Verify send_video sends a Blob with mime_type='image/jpeg'."""
-        # Set test image path
         main.TEST_IMAGE_PATH = temp_test_image
 
         mock_session = MockSession()
 
-        # Run send_video for 2 iterations
         task = asyncio.create_task(main.send_video(mock_session))
-
-        # Let it run briefly
         await asyncio.sleep(2.5)
 
-        # Cancel and check
         task.cancel()
         try:
             await task
         except asyncio.CancelledError:
             pass
 
-        # Verify send_realtime_input was called
         assert mock_session.video_calls, "send_realtime_input not called with video"
 
-        # Get the video blob
         video_blob = mock_session.video_calls[0]
         assert isinstance(video_blob, types.Blob), f"Expected Blob, got {type(video_blob)}"
         assert video_blob.mime_type == "image/jpeg", f"Expected image/jpeg, got {video_blob.mime_type}"
@@ -96,12 +90,11 @@ class TestSendVideoWithTestImage:
 
         async def mock_send(video=None, audio=None):
             if video is not None:
-                call_times.append(asyncio.get_event_loop().time())
+                call_times.append(asyncio.get_running_loop().time())
             await original_send(video=video, audio=audio)
 
         mock_session.send_realtime_input = mock_send
 
-        # Run send_video for ~3 seconds
         task = asyncio.create_task(main.send_video(mock_session))
         await asyncio.sleep(3.5)
         task.cancel()
@@ -111,10 +104,8 @@ class TestSendVideoWithTestImage:
         except asyncio.CancelledError:
             pass
 
-        # Should have at least 2 frames (at t=1s and t=2s)
         assert len(call_times) >= 2, f"Expected >=2 frames, got {len(call_times)}"
 
-        # Check intervals are approximately 1 second (±500ms tolerance)
         for i in range(1, len(call_times)):
             interval = call_times[i] - call_times[i - 1]
             assert 0.5 <= interval <= 1.5, f"Interval {interval}s not within 0.5-1.5s range"
@@ -132,7 +123,7 @@ class TestSendVideoLiveCapture:
         mock_session.send_realtime_input = AsyncMock()
 
         with patch("main.get_screen_frame") as mock_capture:
-            mock_capture.return_value = b"\xFF\xD8\xFF\xE0\x00\x10JFIF"  # Minimal valid JPEG
+            mock_capture.return_value = b"\xFF\xD8\xFF\xE0\x00\x10JFIF"
 
             task = asyncio.create_task(main.send_video(mock_session))
             await asyncio.sleep(2.5)
@@ -143,7 +134,6 @@ class TestSendVideoLiveCapture:
             except asyncio.CancelledError:
                 pass
 
-            # Verify get_screen_frame was called (live capture used)
             assert mock_capture.called, "get_screen_frame not called"
 
 
@@ -157,6 +147,20 @@ class TestLoadTestImage:
             img = Image.new("RGB", (800, 600), color="blue")
             img.save(f.name, format="JPEG")
             yield f.name
+        # Cleanup after test
+        if os.path.exists(f.name):
+            os.unlink(f.name)
+
+    @pytest.fixture
+    def temp_rgba_image(self):
+        """Create a temporary RGBA test image file."""
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            img = Image.new("RGBA", (800, 600), color=(255, 0, 0, 128))
+            img.save(f.name, format="PNG")
+            yield f.name
+        # Cleanup after test
+        if os.path.exists(f.name):
+            os.unlink(f.name)
 
     def test_load_test_image_returns_bytes(self, temp_test_image):
         """Verify _load_test_image returns JPEG bytes."""
@@ -173,6 +177,16 @@ class TestLoadTestImage:
 
         img = Image.open(io.BytesIO(result))
         assert img.size == (1280, 720)
+
+    def test_load_test_image_converts_rgba_to_rgb(self, temp_rgba_image):
+        """Verify RGBA images are converted to RGB before JPEG encoding."""
+        main.TEST_IMAGE_PATH = temp_rgba_image
+        result = main._load_test_image()
+
+        # Should succeed without error and produce valid JPEG
+        img = Image.open(io.BytesIO(result))
+        assert img.size == (1280, 720)
+        assert img.mode == "RGB", f"Expected RGB mode, got {img.mode}"
 
 
 if __name__ == "__main__":

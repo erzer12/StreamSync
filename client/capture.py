@@ -41,7 +41,7 @@ def get_screen_frame(monitor: dict | None = None) -> bytes:
                  Defaults to the global MONITOR config.
 
     Returns:
-        Raw JPEG bytes (notbase64-encoded), ready to send via Gemini Live API.
+        Raw JPEG bytes (not base64-encoded), ready to send via Gemini Live API.
     """
     region = monitor or MONITOR
 

@@ -68,11 +68,14 @@ def _load_test_image() -> bytes:
     Returns:
         Raw JPEG bytes ready for Gemini Live API.
     """
-    img = Image.open(TEST_IMAGE_PATH)
-    img = img.resize((1280, 720), Image.BILINEAR)
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=85)
-    return buf.getvalue()
+    with Image.open(TEST_IMAGE_PATH) as img:
+        # Convert any non-RGB mode (RGBA, P, palette) to RGB to avoid save errors
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        img = img.resize((1280, 720), Image.BILINEAR)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        return buf.getvalue()
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +94,7 @@ async def send_audio(session: genai.live.AsyncSession) -> None:
     )
     try:
         while True:
-            data = await asyncio.get_event_loop().run_in_executor(
+            data = await asyncio.get_running_loop().run_in_executor(
                 None, stream.read, CHUNK_FRAMES_IN, False
             )
             # Use send_realtime_input with Blob for proper Gemini Live API
@@ -108,7 +111,7 @@ async def send_video(session: genai.live.AsyncSession) -> None:
     Uses monotonic clock timing to maintain exactly 1 FPS without drift.
     If TEST_IMAGE_PATH is set, loads a static image instead of live capture.
     """
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     next_tick = loop.time()
 
     while True:
