@@ -10,6 +10,10 @@ Launches three concurrent asyncio tasks:
 import asyncio
 import io
 import os
+from dotenv import load_dotenv
+
+# Load .env file from the parent directory
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 import pyaudio
 from google import genai
@@ -33,7 +37,7 @@ TEST_IMAGE_PATH: str | None = None
 # Gemini Configuration
 # ---------------------------------------------------------------------------
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-MODEL = "gemini-2.5-flash-live-001"
+MODEL = "gemini-3.1-flash-lite-preview"
 
 SAMPLE_RATE_IN = 16_000    # mic → Gemini
 SAMPLE_RATE_OUT = 24_000   # Gemini → speaker
@@ -129,7 +133,8 @@ async def send_video(session: genai.live.AsyncSession) -> None:
         await session.send_realtime_input(video=blob)
 
         # Sleep until next tick (compensating for capture/encode time)
-        delay = max(0, next_tick - loop.time())
+        # Added a longer delay to respect API rate limits
+        delay = max(0.5, next_tick - loop.time()) # minimum 500ms between frames
         await asyncio.sleep(delay)
 
 
@@ -174,7 +179,7 @@ async def receive(session: genai.live.AsyncSession) -> None:
 # Main
 # ---------------------------------------------------------------------------
 async def main() -> None:
-    client = genai.Client(api_key=GEMINI_API_KEY)
+    client = genai.Client(api_key=GEMINI_API_KEY, http_options={"api_version": "v1alpha"})
     config = types.LiveConnectConfig(
         response_modalities=["AUDIO", "TEXT"],
         system_instruction=SYSTEM_PROMPT,
